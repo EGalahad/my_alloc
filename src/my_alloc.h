@@ -10,7 +10,7 @@
 #include <iostream>  // cerr
 #include <new>       // placement new
 
-#define DEBUG
+// #define DEBUG
 
 namespace my_alloc {
 // typedef void (*) new_handler;
@@ -62,28 +62,13 @@ class __alloc_base {
     static const int __MAX_BYTES = 128;
     // static const size_t __ALIGN = 8;
 
-    /*****************
-     * memory pool  *
-     ***************/
-
-    static char* __memory_start;
-    static char* __memory_end;
-    inline static size_t __heap_size() { return __memory_end - __memory_start; }
-
-    /**
-     * @brief refill memory from the memory pool, if memory pool is not enough, malloc to increase the memory pool size
-     *
-     * @param __sz the size of memory to be allocated
-     * @return char* the pointer to the allocated memory
-     */
-    static char* __memory_refill(size_t& __sz);
-
     /************************
      * free list structure  *
      ***********************/
 
     static const int __HEADER_SIZE = sizeof(size_t);
-    static const int __MIN_EXTRA_SIZE = __HEADER_SIZE + sizeof(char*);
+    static const int MIN_SIZE = sizeof(char*);
+    static const int __MIN_EXTRA_SIZE = __HEADER_SIZE + MIN_SIZE;
     static char* __free_list_head;
     static void __init_free_list();
     static size_t __size(void* p) { return *(size_t*)((char*)p - __HEADER_SIZE); }
@@ -100,13 +85,7 @@ class __alloc_base {
 };
 
 template <int __inst>
-char* __alloc_base<__inst>::__memory_start = nullptr;
-
-template <int __inst>
-char* __alloc_base<__inst>::__memory_end = nullptr;
-
-template <int __inst>
-char* __alloc_base<__inst>::__free_list_head = nullptr;
+char* __alloc_base<__inst>::__free_list_head = 0;
 
 template <int __inst>
 void __alloc_base<__inst>::__init_free_list() {
@@ -116,33 +95,18 @@ void __alloc_base<__inst>::__init_free_list() {
 }
 
 template <int __inst>
-char* __alloc_base<__inst>::__memory_refill(size_t& sz) {
-    int __nobjs = 20;
-    size_t __total_bytes = (sz + __HEADER_SIZE) * __nobjs;
-    char* result = __memory_allocate(sz + __HEADER_SIZE, __total_bytes) + __HEADER_SIZE;
-    if (__total_bytes > sz) {
-        __set_size(result + sz, __total_bytes - sz - __HEADER_SIZE * 2);
-#ifdef DEBUG
-        std::cout << "[__alloc_base.__memory_refill]: added to free list: size = " << __total_bytes - sz - __HEADER_SIZE * 2 << " at " << (void*)(result + sz) << std::endl;
-
-#endif
-        __insert_head(result + sz);
-    }
-    return result;
-}
-
-template <int __inst>
 void* __alloc_base<__inst>::allocate(size_t __n) {
     if (!__free_list_head) {
         __init_free_list();
     }
+    __n = (__n < MIN_SIZE) ? MIN_SIZE : __n;
     void* __ret = 0;
     if (__n > (size_t)__MAX_BYTES) {
         __ret = (char*)allocator_type::allocate(__n + __HEADER_SIZE) + __HEADER_SIZE;
         __set_size(__ret, __n);
     } else {
 #ifdef DEBUG
-        std::cout << "[__alloc_base.allocate]: allocate " << __n << " bytes" << std::endl;
+        std::cout << "\n[__alloc_base.allocate]: allocate " << __n << " bytes" << std::endl;
 #endif
         char* cur = __free_list_head;
         char* prev_free = 0;
@@ -162,8 +126,8 @@ void* __alloc_base<__inst>::allocate(size_t __n) {
                     char* nxt = (char*)cur + __n + __HEADER_SIZE;
                     __set_size(nxt, sz - __HEADER_SIZE - __n);
                     __set_next_free(nxt, __next_free(cur));
-
                     __set_next_free(prev_free, nxt);
+
                     __set_size(cur, __n);
                 }
                 break;
@@ -175,12 +139,18 @@ void* __alloc_base<__inst>::allocate(size_t __n) {
 #ifdef DEBUG
             std::cout << "[__alloc_base.allocate]: no more in free list, allocate more memory" << std::endl;
 #endif  // DEBUG
-            __ret = __memory_refill(__n) /* + __HEADER_SIZE */;
+            int nobjs = 20;
+            __ret = (char*)allocator_type::allocate(nobjs * __n + __HEADER_SIZE * 2) + __HEADER_SIZE;
             __set_size(__ret, __n);
+
+            char* nxt = (char*)__ret + __n + __HEADER_SIZE;
+            __set_size(nxt, nobjs * __n - __n);
+            __insert_head(nxt);
         }
     }
 #ifdef DEBUG
-    std::cout << "[__alloc_base.allocate]: allocated " << __n << " bytes at " << __ret << std::endl;
+    std::cout << "[__alloc_base.allocate]: allocated " << __n << " bytes at " << __ret << std::endl
+              << std::endl;
 #endif  // DEBUG
     return __ret;
 }
@@ -195,10 +165,10 @@ void __alloc_base<__inst>::deallocate(void* __p, size_t) {
         allocator_type::deallocate((char*)__p - __HEADER_SIZE, __n + __HEADER_SIZE);
     } else {
 #ifdef DEBUG
-        std::cout << "[__alloc_base.deallocate]: added to free list: size = " << __n << " at " << (void*)__p << std::endl;
+        std::cout << "[__alloc_base.deallocate]: added to free list: size = " << __n << " at " << (void*)__p << std::endl
+                  << std::endl;
 #endif  // DEBUG
         __insert_head(__p);
-        // }
     }
 }
 
@@ -228,7 +198,7 @@ class my_alloc {
     typedef size_t size_type;
     typedef ptrdiff_t difference_type;
 
-    typedef __detail::__alloc_base<> __alloc_base;
+    typedef __detail::__alloc_base<0> __alloc_base;
 
     template <class _Tp1>
     struct rebind {
@@ -246,23 +216,14 @@ class my_alloc {
 
     pointer allocate(size_type __n, const void* = 0) {
         if (__n == 0) return 0;
-#ifdef DEBUG
-        std::cout << "[my_alloc.allocate]: allocating " << __n << std::endl;
-#endif  // DEBUG
         return (pointer)__alloc_base::allocate(__n * sizeof(_Tp));
     }
 
     void deallocate(pointer __p, size_type) {
-#ifdef DEBUG
-        std::cout << "[my_alloc.deallocate]: deallocating " << __p << std::endl;
-#endif  // DEBUG
         __alloc_base::deallocate(__p, 0);
     }
 
     pointer reallocate(pointer __p, size_type __old_sz, size_type __new_sz) {
-#ifdef DEBUG
-        std::cout << "[my_alloc.reallocate]: reallocating " << __p << " from " << __old_sz << " to " << __new_sz << std::endl;
-#endif  // DEBUG
         return __alloc_base::reallocate(__p, __old_sz * sizeof(_Tp), __new_sz * sizeof(_Tp));
     }
 
