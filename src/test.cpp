@@ -6,6 +6,39 @@
 #include "my_alloc.h"
 
 template <class _Alloc>
+void simple_test(const _Alloc &) {
+    std::vector<int, _Alloc> v;
+    for (int i = 0; i < 100; ++i) {
+        v.push_back(i);
+    }
+    std::cout << "push_back 100 ints" << std::endl;
+    for (int i = 0; i < 100; ++i) {
+        int index = rand() % v.size();
+        v.insert(v.begin() + index, i);
+    }
+    std::cout << "insert 100 ints" << std::endl;
+    for (int i = 0; i < 100; ++i) {
+        int index = rand() % v.size();
+        v.erase(v.begin() + index);
+    }
+    std::cout << "erase 100 ints" << std::endl;
+    v.assign(100, 0);
+    std::cout << "assign 100 ints" << std::endl;
+    v.resize(100);
+    std::cout << "resize 100 ints" << std::endl;
+    for (int i = 0; i < 100; ++i) {
+        v.emplace(v.begin() + i, i);
+    }
+    std::cout << "emplace 000 ints" << std::endl;
+    v.shrink_to_fit();
+    std::cout << "shrink_to_fit" << std::endl;
+    for (int i = 0; i < 100; ++i) {
+        v.pop_back();
+    }
+    std::cout << "pop_back 100 ints" << std::endl;
+    v.clear();
+}
+template <class _Alloc>
 void test(const _Alloc &) {
     std::vector<int, _Alloc> v;
     for (int i = 0; i < 100000; ++i) {
@@ -24,18 +57,18 @@ void test(const _Alloc &) {
     std::cout << "erase 100000 ints" << std::endl;
     v.assign(100000, 0);
     std::cout << "assign 100000 ints" << std::endl;
-    v.resize(10000000);
-    std::cout << "resize 10000000 ints" << std::endl;
-    for (int i = 0; i < 10000000; ++i) {
+    v.resize(100000);
+    std::cout << "resize 100000 ints" << std::endl;
+    for (int i = 0; i < 100000; ++i) {
         v.emplace(v.begin() + i, i);
     }
-    std::cout << "emplace 10000000 ints" << std::endl;
+    std::cout << "emplace 100000 ints" << std::endl;
     v.shrink_to_fit();
     std::cout << "shrink_to_fit" << std::endl;
-    for (int i = 0; i < 10000000; ++i) {
+    for (int i = 0; i < 100000; ++i) {
         v.pop_back();
     }
-    std::cout << "pop_back 10000000 ints" << std::endl;
+    std::cout << "pop_back 100000 ints" << std::endl;
     v.clear();
 }
 
