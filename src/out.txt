@@ -6,7 +6,7 @@ resize 100000 ints
 emplace 100000 ints
 shrink_to_fit
 pop_back 100000 ints
-[test_my_alloc]: my_alloc Time difference = 27568893[µs]
+[test_my_alloc]: my_alloc Time difference = 27893318[µs]
 push_back 100000 ints
 insert 100000 ints
 erase 100000 ints
@@ -15,4 +15,4 @@ resize 100000 ints
 emplace 100000 ints
 shrink_to_fit
 pop_back 100000 ints
-[test_my_alloc]: std::alloc Time difference = 27414304[µs]
+[test_my_alloc]: std::alloc Time difference = 27760370[µs]

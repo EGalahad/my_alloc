@@ -65,8 +65,7 @@ class __alloc_base {
         return ((__bytes + __ALIGN - 1) & ~(__ALIGN - 1));
     }
     static char* free_list[__MAX_BYTES / __ALIGN];
-    static char* __next(char* __p) { return *(reinterpret_cast<char**>(__p)); }
-    static void __set_next(char* __p, char* __next_p) { *(reinterpret_cast<char**>(__p)) = __next_p; }
+    static char*& __next(char* __p) { return *(reinterpret_cast<char**>(__p)); }
 
     static char* __memory_start;
     static char* __memory_end;
@@ -97,40 +96,43 @@ char* __alloc_base<__inst>::free_list[__MAX_BYTES / __ALIGN] = {0};
 
 template <int __inst>
 char* __alloc_base<__inst>::__memory_refill(size_t __n_rounded) {
+    int index = __n_rounded / __ALIGN - 1;
     int __nobjs = 20;
     size_t total_bytes = __nobjs * __n_rounded;
-    if (total_bytes <= __memory_size()) {
-    } else if (__n_rounded <= __memory_size()) {
-        __nobjs = __memory_size() / __n_rounded;
-        total_bytes = __nobjs * __n_rounded;
-    } else {
-        size_t bytes_to_get = __n_rounded * __nobjs * 2 + (__memory_size() >> 4);
-        if (__memory_size() > 0) {
-            for (int index = __n_rounded / __ALIGN - 2; index >= 0; --index) {
-                int size = (index + 1) * __ALIGN;
-                while (__memory_start < __memory_end) {
-                    __set_next(__memory_start, free_list[index]);
-                    free_list[index] = __memory_start;
-                    __memory_start += size;
+    if (__memory_size() < total_bytes) {
+        if (__memory_size() >= __n_rounded) {
+            __nobjs = __memory_size() / __n_rounded;
+            total_bytes = __nobjs * __n_rounded;
+        } else {
+            size_t bytes_to_get = __n_rounded * __nobjs * 2 + (__memory_size() >> 4);
+            bytes_to_get = __round_up(bytes_to_get);
+            if (__memory_size() > 0) {
+                for (int __index = index - 1; __index >= 0; --__index) {
+                    int __size = (__index + 1) * __ALIGN;
+                    while (__memory_start < __memory_end) {
+                        __next(__memory_start) = free_list[__index];
+                        free_list[__index] = __memory_start;
+                        __memory_start += __size;
+                    }
                 }
             }
-        }
 #ifdef DEBUG
-        assert(__memory_start == __memory_end);
+            assert(__memory_start == __memory_end);
 #endif
-        __memory_start = static_cast<char*>(malloc(bytes_to_get));
-        if (__memory_start == nullptr) {
-            std::cerr << "out of memory" << std::endl;
-            exit(1);
+            __memory_start = static_cast<char*>(malloc(bytes_to_get));
+            if (__memory_start == nullptr) {
+                std::cerr << "out of memory" << std::endl;
+                exit(1);
+            }
+            __memory_end = __memory_start + bytes_to_get;
         }
-        __memory_end = __memory_start + bytes_to_get;
     }
 #ifdef DEBUG
-    assert(free_list[__n_rounded / __ALIGN - 1] == nullptr);
+    assert(free_list[index] == nullptr);
 #endif  // DEBUG
-    for (char* cur = __memory_start ; cur < __memory_start + total_bytes; cur += __n_rounded) {
-        __set_next(__memory_start, free_list[__n_rounded / __ALIGN - 1]);
-        free_list[__n_rounded / __ALIGN - 1] = __memory_start;
+    for (char* cur = __memory_start; cur < __memory_start + total_bytes; cur += __n_rounded) {
+        __next(__memory_start) = free_list[index];
+        free_list[index] = __memory_start;
     }
     char* result = __memory_start;
     __memory_start += total_bytes;
@@ -142,9 +144,10 @@ void* __alloc_base<__inst>::allocate(size_t __n) {
     if (__n > static_cast<size_t>(__MAX_BYTES)) {
         return _Alloc::allocate(__n);
     } else {
-        char* cur = free_list[__round_up(__n) / __ALIGN - 1];
-        if (!cur) cur = __memory_refill(__round_up(__n));
-        free_list[__round_up(__n) / __ALIGN - 1] = __next(cur);
+        int index = __round_up(__n) / __ALIGN - 1;
+        char* cur = free_list[index];
+        if (!cur) cur = __memory_refill((index + 1) * __ALIGN);
+        free_list[index] = __next(cur);
         return cur;
     }
 }
@@ -155,7 +158,7 @@ void __alloc_base<__inst>::deallocate(void* __p, size_t __n) {
         _Alloc::deallocate(__p, __n);
     } else {
         int index = __round_up(__n) / __ALIGN - 1;
-        __set_next((char*)__p, free_list[index]);
+        __next(reinterpret_cast<char*>(__p)) = free_list[index];
         free_list[index] = (char*)__p;
     }
 }
