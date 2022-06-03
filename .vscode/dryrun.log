@@ -1,0 +1,6 @@
+make --dry-run --keep-going --print-directory
+make: Entering directory '/mnt/e/Elijah/current/oop/project/my_alloc'
+make: Leaving directory '/mnt/e/Elijah/current/oop/project/my_alloc'
+ 
+make: *** No targets specified and no makefile found.  Stop.
+
