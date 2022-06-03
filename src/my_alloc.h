@@ -65,11 +65,13 @@ class __alloc_base {
      * free list structure  *
      ***********************/
 
-    static const int __HEADER_SIZE = sizeof(size_t) + sizeof(char*);
+    static const int __HEADER_SIZE = sizeof(size_t);
+    static const int __MIN_SIZE = sizeof(char*);
+    static const int __EXTRA_SIZE = __HEADER_SIZE + sizeof(char*);
     static char* __free_list_head;
     static void __init_free_list();
     static size_t& __size(void* p) { return *(size_t*)((char*)p - __HEADER_SIZE); }
-    static char*& __next_free(void* p) { return *reinterpret_cast<char**>(reinterpret_cast<char*>(p) - __HEADER_SIZE + sizeof(size_t)); }
+    static char*& __next_free(void* p) { return *reinterpret_cast<char**>(p); }
     static void __insert_head(void* p) { __next_free(p) = __next_free(__free_list_head), __next_free(__free_list_head) = reinterpret_cast<char*>(p); }
 
    public:
@@ -84,7 +86,7 @@ char* __alloc_base<__inst>::__free_list_head = nullptr;
 
 template <int __inst>
 void __alloc_base<__inst>::__init_free_list() {
-    __free_list_head = (char*)malloc(__HEADER_SIZE) + __HEADER_SIZE;
+    __free_list_head = (char*)malloc(__EXTRA_SIZE) + __HEADER_SIZE;
     __next_free(__free_list_head) = nullptr;
     __size(__free_list_head) = 0;
 }
@@ -94,7 +96,7 @@ void* __alloc_base<__inst>::allocate(size_t __n) {
     if (!__free_list_head) {
         __init_free_list();
     }
-    // __n = (__n < MIN_SIZE) ? MIN_SIZE : __n;
+    __n = (__n < __MIN_SIZE) ? __MIN_SIZE : __n;
     void* __ret = 0;
     if (__n > (size_t)__MAX_BYTES) {
         __ret = (char*)allocator_type::allocate(__n + __HEADER_SIZE) + __HEADER_SIZE;
